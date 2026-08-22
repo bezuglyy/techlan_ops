@@ -3,9 +3,12 @@
   "name": "Techlan ARM",
   "codeowners": [],
   "config_flow": true,
-  "documentation": "https://core.tl.local:8443/ohrana.htm",
+  "documentation": "https://github.com/bezuglyy/techlan_ops",
   "integration_type": "hub",
   "iot_class": "local_polling",
-  "requirements": ["websocket-client>=1.8.0"],
-  "version": "0.4.0"
+  "requirements": [
+    "websocket-client>=1.8.0"
+  ],
+  "version": "0.4.0",
+  "issue_tracker": "https://github.com/bezuglyy/techlan_ops/issues"
 }
