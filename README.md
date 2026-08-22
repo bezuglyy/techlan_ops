@@ -1,18 +1,34 @@
 # Techlan ARM
 
-Кастомная интеграция Home Assistant · v0.4.0
+Кастомная интеграция для [Home Assistant](https://www.home-assistant.io) · версия **0.4.0**.
 
 ![icon](custom_components/techlan_ops/brand/icon.png)
-Управление охранно-пожарной системой Болид (ServerSkif / ПКУ) через WebSocket API.
+
+| | |
+|---|---|
+| Домен | `techlan_ops` |
+| Версия | 0.4.0 |
+| Тип | custom integration |
+
+## Описание
+
+Управление охранно-пожарной системой Болид ServerSkif (Techlan ARM).
 
 ## Возможности
-- Сенсоры и бинарные датчики разделов/шлейфов
-- Кнопки управления (снять/взять раздел)
-- Переключатели состояний
-- Интеграция с сервером Techlan ARM (core.tl.local)
+
+- Бинарные датчики (движение, контакты и т.п.)
+- Кнопки и действия
+- Сенсоры и мониторинг состояния
+- Переключатели и вкл/выкл устройства
 
 ## Установка
-Скопируйте папку `custom_components/techlan_ops/` в каталог `custom_components/` конфигурации HA и перезапустите Home Assistant.
+
+1. Скопируйте папку `custom_components/{domain}/` в каталог `custom_components/` конфигурации Home Assistant.
+2. Перезапустите Home Assistant.
+3. Настройки → Устройства и службы → Добавить интеграцию → **{mname}**.
+
+> Установка через HACS: добавьте репозиторий `https://github.com/bezuglyy/{repo}` как Custom repository (категория Integration).
 
 ## Лицензия
+
 MIT
