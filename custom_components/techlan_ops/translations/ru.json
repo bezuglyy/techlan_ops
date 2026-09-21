@@ -30,15 +30,29 @@
           "password": "Новый пароль ServerSkif",
           "ws_path": "Путь WebSocket",
           "scan_interval": "Интервал опроса, секунд",
-          "selected_loops": "Шлейфы для опроса"
+          "selected_loops": "Шлейфы для опроса",
+          "command_timeout": "Таймаут подтверждения команды, секунд"
         }
       }
     }
   },
-    "error": {
-      "cannot_connect": "Не удалось подключиться к ARM WebSocket или авторизоваться в ServerSkif"
-    },
-    "abort": {
-      "already_configured": "Этот адрес ARM уже настроен"
+  "entity": {
+    "binary_sensor": {
+      "availability": {
+        "name": "Доступность"
+      }
     }
+  },
+  "issues": {
+    "arm_unreachable": {
+      "title": "ARM-OPS недоступен",
+      "description": "Не удалось получить данные от ARM-OPS/ServerSkif: {error}. Проверьте Core (HTTP 18081 / HTTPS 8443) и службы ARM-OPS."
+    }
+  },
+  "error": {
+    "cannot_connect": "Не удалось подключиться к ARM WebSocket или авторизоваться в ServerSkif"
+  },
+  "abort": {
+    "already_configured": "Этот адрес ARM уже настроен"
+  }
 }

@@ -1,211 +1,225 @@
-"""Small async WebSocket client for ServerSkif through ARM WebSocket proxy."""
+"""WebSocket-клиент ServerSkif через прокси ARM WebSocket (операции интеграции).
+
+Общая механика постоянного соединения/лимитов — в ``_shared/shared_api.py``
+(канонический источник — ``tools/ha-shared/shared_api.py``).
+
+``techlan_ops`` — управляющая интеграция: помимо чтения снимка она умеет
+отправлять команды ``controlPart_Arm``/``controlPart_DisArm``. Подтверждение
+команды выполняется по состоянию раздела (коды 24/109) в ``__init__.py``.
+"""
 
 from __future__ import annotations
 
 import asyncio
-import json
 import time
 from typing import Any
-from urllib.parse import urlparse, urlunparse
 
-import websocket
+from ._shared.shared_api import (
+    PersistentTechlanClient,
+    TechlanApiError,
+    TechlanCommandError,
+    format_loop_label,
+    loop_key,
+    parse_loop_keys,
+    state_confirms,
+    websocket_url,
+)
+
+__all__ = [
+    "TechlanApiClient",
+    "TechlanApiError",
+    "TechlanCommandError",
+    "websocket_url",
+]
 
 
-class TechlanApiError(Exception):
-    """Raised when ARM/ServerSkif cannot answer."""
+class TechlanApiClient(PersistentTechlanClient):
+    """ServerSkif API client for techlan_ops (read + control)."""
 
-
-def websocket_url(base_url: str, ws_path: str = "/skif-ws") -> str:
-    """Convert the configured HTTP ARM URL to its WebSocket proxy URL."""
-    parsed = urlparse(base_url.rstrip("/"))
-    scheme = "wss" if parsed.scheme == "https" else "ws"
-    return urlunparse((scheme, parsed.netloc, "/" + ws_path.lstrip("/"), "", "", ""))
-
-
-class TechlanApiClient:
-    """Read-only ServerSkif API client."""
-
-    def __init__(self, base_url: str, arm_id: str, password: str, ws_path: str = "/skif-ws") -> None:
-        self._url = websocket_url(base_url, ws_path)
-        self._arm_id = arm_id
-        self._password = password
-        self._pending_messages: list[dict[str, Any]] = []
+    # --- discovery (config flow selector) ------------------------------------
 
     async def async_discover_loops(self) -> list[dict[str, Any]]:
         """Discover loop (ШС) choices grouped by section for the HA selector."""
-        return await asyncio.to_thread(self._discover_loops_sync)
+        return await self.async_run(self._discover_loops_sync)
 
     def _discover_loops_sync(self) -> list[dict[str, Any]]:
-        self._pending_messages.clear()
-        try:
-            ws = websocket.create_connection(self._url, timeout=8, http_proxy_host=None, http_proxy_port=None)
-            try:
-                self._send(ws, {"funct": "armId", "id": self._arm_id, "pwd": self._password})
-                if self._wait_for(ws, "armId").get("ret") is not True:
-                    raise TechlanApiError("ServerSkif ARM authentication failed")
-                self._send(ws, {"funct": "getListPKU"})
-                pkus = [int(item) for item in (self._wait_for(ws, "getListPKU").get("ret") or [])]
-                result: list[dict[str, Any]] = []
-                for pku in pkus:
-                    self._send(ws, {"funct": "getListParts", "pku": pku})
-                    parts = [int(item) for item in (self._wait_for_pku(ws, "getListParts", pku).get("ret") or [])]
-                    for part in parts:
-                        self._send(ws, {"funct": "getListPartSh", "pku": pku, "req": part})
-                        shs = [int(item) for item in (self._wait_for_pku(ws, "getListPartSh", pku).get("ret") or [])]
-                        descriptions: list[str] = []
-                        if shs:
-                            self._send(ws, {"funct": "getShDescription", "pku": pku, "req": shs})
-                            descriptions = [str(item) for item in (self._wait_for_pku(ws, "getShDescription", pku).get("ret") or [])]
-                        for sh, description in zip(shs, descriptions or [""] * len(shs)):
-                            result.append({
-                                "key": f"{pku}:{part}:{sh}",
-                                "pku": pku,
-                                "part": part,
-                                "sh": sh,
-                                "description": description,
-                                "label": f"ПКУ {pku} · раздел {part} · ШС {sh >> 8}/{sh & 0xFF} — {description or 'Без названия'}",
-                            })
-                return result
-            finally:
-                ws.close()
-        except TechlanApiError:
-            raise
-        except Exception as exc:
-            raise TechlanApiError(str(exc)) from exc
+        result: list[dict[str, Any]] = []
+        pkus = [
+            int(item) for item in (self.request_sync("getListPKU").get("ret") or [])
+        ]
+        for pku in pkus:
+            parts = [
+                int(item)
+                for item in (
+                    self.request_sync("getListParts", pku=pku).get("ret") or []
+                )
+            ]
+            for part in parts:
+                shs = [
+                    int(item)
+                    for item in (
+                        self.request_sync(
+                            "getListPartSh", pku=pku, extra={"req": part}
+                        ).get("ret")
+                        or []
+                    )
+                ]
+                descriptions: list[str] = []
+                if shs:
+                    descriptions = [
+                        str(item)
+                        for item in (
+                            self.request_sync(
+                                "getShDescription", pku=pku, extra={"req": shs}
+                            ).get("ret")
+                            or []
+                        )
+                    ]
+                for sh, description in zip(shs, descriptions or [""] * len(shs)):
+                    result.append(
+                        {
+                            "key": loop_key(pku, part, sh),
+                            "pku": pku,
+                            "part": part,
+                            "sh": sh,
+                            "description": description,
+                            "label": format_loop_label(pku, part, sh, description),
+                        }
+                    )
+        return result
 
-    async def async_fetch_snapshot(self, selected_loops: list[str] | None = None) -> dict[str, Any]:
-        """Open one read-only session and fetch PKU/part state snapshot."""
-        return await asyncio.to_thread(self._fetch_snapshot_sync, selected_loops)
+    # --- snapshot -------------------------------------------------------------
 
-    def _fetch_snapshot_sync(self, selected_loops: list[str] | None = None) -> dict[str, Any]:
-        self._pending_messages.clear()
-        try:
-            ws = websocket.create_connection(self._url, timeout=8, http_proxy_host=None, http_proxy_port=None)
-            try:
-                self._send(ws, {"funct": "armId", "id": self._arm_id, "pwd": self._password})
-                arm_result = self._wait_for(ws, "armId")
-                if arm_result.get("ret") is not True:
-                    raise TechlanApiError("ServerSkif ARM authentication failed")
-                self._send(ws, {"funct": "getListPKU"})
-                pku_result = self._wait_for(ws, "getListPKU")
-                pkus = [int(item) for item in (pku_result.get("ret") or [])]
-                if not pkus:
-                    raise TechlanApiError("ServerSkif returned no PKU")
-                selected = None if selected_loops is None else {
-                    tuple(int(value) for value in item.split(":")) for item in selected_loops if len(item.split(":")) == 3
+    async def async_fetch_snapshot(
+        self, selected_loops: list[str] | None = None
+    ) -> dict[str, Any]:
+        """Fetch PKU/part state over the persistent session."""
+        return await self.async_run(self._fetch_snapshot_sync, selected_loops)
+
+    def _fetch_snapshot_sync(
+        self, selected_loops: list[str] | None = None
+    ) -> dict[str, Any]:
+        pkus = [
+            int(item) for item in (self.request_sync("getListPKU").get("ret") or [])
+        ]
+        if not pkus:
+            raise TechlanApiError("ServerSkif returned no PKU")
+        selected = None if selected_loops is None else parse_loop_keys(selected_loops)
+        if selected is not None:
+            pkus = sorted({pku for pku, _part, _sh in selected})
+        parts: dict[int, list[int]] = {}
+        descriptions: dict[tuple[int, int], str] = {}
+        states: dict[int, dict[int, int]] = {pku: {} for pku in pkus}
+        # Query one PKU at a time. ServerSkif emits unsolicited state messages,
+        # so sequential requests avoid response interleaving.
+        for pku in pkus:
+            if selected is None:
+                part_list = [
+                    int(item)
+                    for item in (
+                        self.request_sync("getListParts", pku=pku).get("ret") or []
+                    )
+                ]
+            else:
+                part_list = sorted(
+                    {
+                        part
+                        for selected_pku, part, _sh in selected
+                        if selected_pku == pku
+                    }
+                )
+            parts[pku] = part_list
+            if part_list:
+                description_message = self.request_sync(
+                    "getPartDescription", pku=pku, extra={"req": part_list}
+                )
+                for part, description in zip(
+                    part_list, description_message.get("ret") or []
+                ):
+                    descriptions[(pku, part)] = str(description)
+                state_message = self.request_sync(
+                    "getPartState", pku=pku, extra={"req": part_list}
+                )
+                states[pku] = {
+                    part: int(state)
+                    for part, state in zip(part_list, state_message.get("ret") or [])
                 }
-                if selected is not None:
-                    pkus = sorted({pku for pku, _part, _sh in selected})
-                parts: dict[int, list[int]] = {}
-                descriptions: dict[tuple[int, int], str] = {}
-                states: dict[int, dict[int, int]] = {pku: {} for pku in pkus}
-                loops: dict[tuple[int, int], dict[int, dict[str, Any]]] = {}
-                # Query one PKU at a time. ServerSkif emits unsolicited state
-                # messages, so sequential requests avoid response interleaving.
-                for pku in pkus:
-                    if selected is None:
-                        self._send(ws, {"funct": "getListParts", "pku": pku})
-                        part_list = [int(item) for item in (self._wait_for_pku(ws, "getListParts", pku).get("ret") or [])]
-                    else:
-                        part_list = sorted({part for selected_pku, part, _sh in selected if selected_pku == pku})
-                    parts[pku] = part_list
-                    if part_list:
-                        self._send(ws, {"funct": "getPartDescription", "pku": pku, "req": part_list})
-                        description_message = self._wait_for_pku(ws, "getPartDescription", pku)
-                        for part, description in zip(part_list, description_message.get("ret") or []):
-                            descriptions[(pku, part)] = str(description)
-                        self._send(ws, {"funct": "getPartState", "pku": pku, "req": part_list})
-                        state_message = self._wait_for_pku(ws, "getPartState", pku)
-                        states[pku] = {part: int(state) for part, state in zip(part_list, state_message.get("ret") or [])}
-                    if selected is not None:
-                        for part in part_list:
-                            shs = sorted({sh for selected_pku, selected_part, sh in selected if selected_pku == pku and selected_part == part})
-                            if not shs:
-                                continue
-                            self._send(ws, {"funct": "getShDescription", "pku": pku, "req": shs})
-                            sh_desc = self._wait_for_pku(ws, "getShDescription", pku).get("ret") or []
-                            self._send(ws, {"funct": "getShState", "pku": pku, "req": shs})
-                            sh_states = self._wait_for_pku(ws, "getShState", pku).get("ret") or []
-                            loops[(pku, part)] = {sh: {"description": str(desc), "state_code": int(state)} for sh, desc, state in zip(shs, sh_desc, sh_states)}
-                snapshot = {"available": True, "pkus": {}, "updated_at": time.time()}
-                for pku in pkus:
-                    snapshot["pkus"][pku] = {"part_count": len(parts.get(pku, [])), "parts": {part: {"description": descriptions.get((pku, part), ""), "state_code": state, "loops": loops.get((pku, part), {})} for part, state in states.get(pku, {}).items()}}
-                return snapshot
-            finally:
-                ws.close()
-        except TechlanApiError:
-            raise
-        except Exception as exc:
-            raise TechlanApiError(str(exc)) from exc
+        snapshot: dict[str, Any] = {
+            "available": True,
+            "pkus": {},
+            "updated_at": time.time(),
+        }
+        for pku in pkus:
+            snapshot["pkus"][pku] = {
+                "part_count": len(parts.get(pku, [])),
+                "parts": {
+                    part: {
+                        "description": descriptions.get((pku, part), ""),
+                        "state_code": state,
+                        "loops": {},
+                    }
+                    for part, state in states.get(pku, {}).items()
+                },
+            }
+        return snapshot
 
     async def async_validate(self) -> None:
         """Validate URL, authentication and at least one PKU."""
         await self.async_fetch_snapshot()
 
+    # --- control --------------------------------------------------------------
+
+    async def async_get_part_state(self, pku: int, part: int) -> int | None:
+        """Read the current state code of a single section."""
+        message = await self.async_request(
+            "getPartState", pku=int(pku), extra={"req": [int(part)]}
+        )
+        values = message.get("ret") or []
+        try:
+            return int(values[0]) if values else None
+        except (TypeError, ValueError):
+            return None
+
     async def async_control_part(self, action: str, pku: int, part: int) -> None:
         """Send one protected arm/disarm command to a section."""
         if action not in {"arm", "disarm"}:
             raise TechlanApiError("Unsupported section control action")
-        await asyncio.to_thread(self._control_part_sync, action, pku, part)
-
-    def _control_part_sync(self, action: str, pku: int, part: int) -> None:
         command_name = "controlPart_Arm" if action == "arm" else "controlPart_DisArm"
-        try:
-            ws = websocket.create_connection(self._url, timeout=8, http_proxy_host=None, http_proxy_port=None)
-            try:
-                self._send(ws, {"funct": "armId", "id": self._arm_id, "pwd": self._password})
-                if self._wait_for(ws, "armId").get("ret") is not True:
-                    raise TechlanApiError("ServerSkif ARM authentication failed")
-                # ServerSkif expects the operator authentication immediately
-                # before the control command on the same WebSocket session.
-                self._send(ws, {"funct": "userId", "pwd": self._password})
-                if self._wait_for(ws, "userId").get("ret") is not True:
-                    raise TechlanApiError("ServerSkif operator authentication failed")
-                self._send(ws, {"funct": command_name, "pku": int(pku), "part": int(part)})
-            finally:
-                ws.close()
-        except TechlanApiError:
-            raise
-        except Exception as exc:
-            raise TechlanApiError(str(exc)) from exc
+        await self.async_send_command(
+            {"funct": command_name, "pku": int(pku), "part": int(part)}
+        )
 
-    def _send(self, ws: Any, payload: dict[str, Any]) -> None:
-        ws.send(json.dumps(payload, ensure_ascii=False))
+    async def async_control_and_confirm(
+        self,
+        action: str,
+        pku: int,
+        part: int,
+        *,
+        target_codes: frozenset[int],
+        confirm_timeout: float,
+        poll_interval: float = 1.0,
+        retries: int = 1,
+    ) -> int:
+        """Send a command, then wait for the state confirmation (24/109).
 
-    def _wait_for(self, ws: Any, funct: str) -> dict[str, Any]:
-        while True:
-            message = self._receive(ws)
-            if message.get("funct") == funct:
-                return message
-
-    def _wait_for_pku(self, ws: Any, funct: str, pku: int) -> dict[str, Any]:
-        while True:
-            message = self._receive(ws)
-            if message.get("funct") == funct and int(message.get("pku", -1)) == pku:
-                return message
-
-    def _receive(self, ws: Any) -> dict[str, Any]:
-        if self._pending_messages:
-            return self._pending_messages.pop(0)
-        try:
-            raw = ws.recv()
-            decoder = json.JSONDecoder()
-            offset = 0
-            while offset < len(raw):
-                while offset < len(raw) and raw[offset] not in "[{":
-                    offset += 1
-                if offset >= len(raw):
+        Retries once if the first command is not confirmed. Returns the number
+        of attempts made; raises ``TechlanCommandError`` on failure.
+        """
+        attempts = 0
+        max_attempts = 1 + max(0, int(retries))
+        last_state: int | None = None
+        while attempts < max_attempts:
+            attempts += 1
+            await self.async_control_part(action, pku, part)
+            deadline = time.monotonic() + max(0.0, float(confirm_timeout))
+            while True:
+                last_state = await self.async_get_part_state(pku, part)
+                if state_confirms(last_state, target_codes):
+                    return attempts
+                if time.monotonic() >= deadline:
                     break
-                try:
-                    message, next_offset = decoder.raw_decode(raw, offset)
-                except json.JSONDecodeError:
-                    offset += 1
-                    continue
-                if isinstance(message, dict):
-                    self._pending_messages.append(message)
-                offset = next_offset
-            if self._pending_messages:
-                return self._pending_messages.pop(0)
-            raise TechlanApiError("Empty message from ServerSkif")
-        except json.JSONDecodeError as exc:
-            raise TechlanApiError("Invalid JSON from ServerSkif") from exc
+                await asyncio.sleep(poll_interval)
+        raise TechlanCommandError(
+            f"Команда {action} для ПКУ {pku}/{part} не подтверждена "
+            f"(состояние {last_state})"
+        )

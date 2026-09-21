@@ -1,11 +1,11 @@
 # Techlan ARM
 ![Release](https://img.shields.io/github/v/release/bezuglyy/techlan_ops?label=Release&style=flat-square) ![HACS](https://img.shields.io/badge/HACS-Custom%20Repository-purple?style=flat-square) ![License](https://img.shields.io/github/license/bezuglyy/techlan_ops?style=flat-square) ![HA](https://img.shields.io/badge/HA-2025.1%2B-2ea44f?style=flat-square)
-Кастомная интеграция для [Home Assistant](https://www.home-assistant.io) · версия **0.4.0**.
+Кастомная интеграция для [Home Assistant](https://www.home-assistant.io) · версия **0.6.0**.
 ![icon](custom_components/techlan_ops/brand/icon.png)
 | | |
 |---|---|
 | Домен | `techlan_ops` |
-| Версия | 0.4.0 |
+| Версия | 0.6.0 |
 | Тип | custom integration |
 ## Описание
 Управление охранно-пожарной системой Болид ServerSkif (Techlan ARM).
@@ -14,6 +14,12 @@
 - Кнопки и действия
 - Сенсоры и мониторинг состояния
 - Переключатели и вкл/выкл устройства
+### Изменения 0.6.0
+- **Постоянное WebSocket-соединение** с реконнектом (backoff 1→30 с), keepalive и лимитами — меньше нагрузки на ServerSkif.
+- **Подтверждение команд:** после взятия/снятия ждём состояние 24/109 в пределах таймаута (по умолчанию 30 с), 1 ретрай; ошибки — понятным текстом.
+- **HA-события** `techlan_ops_state_changed` и `techlan_ops_alarm` для автоматизаций.
+- Расширенная **диагностика** (маскирует секреты), **Repairs**, enum-классы, миграция схемы (minor 3, опция `command_timeout`).
+- Новый **фирменный брендинг** (светлая/тёмная тема).
 ### Установка
 1. Скопируйте папку `custom_components/techlan_ops/` в каталог `custom_components/` конфигурации Home Assistant.
 2. Перезапустите Home Assistant.

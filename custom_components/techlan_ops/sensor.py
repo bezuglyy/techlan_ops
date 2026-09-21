@@ -7,17 +7,37 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from ._shared.shared_entities import build_device_info
 from .const import ALARM_STATE_CODES, DOMAIN, STATE_NAMES
 from .coordinator import TechlanDataUpdateCoordinator
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities) -> None:
+def _pku_device_info(coordinator: TechlanDataUpdateCoordinator, pku: int) -> dict:
+    """Child PKU device info with version-aware parent link (via_device_id / via_device)."""
+    return build_device_info(
+        identifiers={(DOMAIN, f"pku_{pku}")},
+        name=f"Скиф ПКУ {pku}",
+        model="ServerSkif PKU",
+        configuration_url=coordinator.configuration_url,
+        via_device_id=coordinator.parent_device_id,
+        via_device=coordinator.parent_identifier,
+    )
+
+
+async def async_setup_entry(
+    hass: HomeAssistant, entry: ConfigEntry, async_add_entities
+) -> None:
     coordinator: TechlanDataUpdateCoordinator = entry.runtime_data
     await coordinator.async_config_entry_first_refresh()
-    entities = [TechlanPkuSensor(coordinator, entry, pku) for pku in sorted(coordinator.data.get("pkus", {}))]
+    entities = [
+        TechlanPkuSensor(coordinator, entry, pku)
+        for pku in sorted(coordinator.data.get("pkus", {}))
+    ]
     for pku, item in coordinator.data.get("pkus", {}).items():
         for part, details in item.get("parts", {}).items():
-            entities.append(TechlanPartSensor(coordinator, entry, pku, int(part), details))
+            entities.append(
+                TechlanPartSensor(coordinator, entry, pku, int(part), details)
+            )
     async_add_entities(entities)
 
 
@@ -25,19 +45,16 @@ class TechlanPkuSensor(CoordinatorEntity[TechlanDataUpdateCoordinator], SensorEn
     """One compact sensor per PKU; details are exposed as attributes."""
 
     _attr_icon = "mdi:shield-home-outline"
+    _attr_has_entity_name = False
 
-    def __init__(self, coordinator: TechlanDataUpdateCoordinator, entry: ConfigEntry, pku: int) -> None:
+    def __init__(
+        self, coordinator: TechlanDataUpdateCoordinator, entry: ConfigEntry, pku: int
+    ) -> None:
         super().__init__(coordinator)
         self._pku = pku
         self._attr_unique_id = f"{DOMAIN}_pku_{pku}"
         self._attr_name = f"Скиф ПКУ {pku}"
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, f"pku_{pku}")},
-            "name": f"Скиф ПКУ {pku}",
-            "manufacturer": "Techlan",
-            "model": "ServerSkif PKU",
-            "via_device": (DOMAIN, "arm_ops"),
-        }
+        self._attr_device_info = _pku_device_info(coordinator, pku)
 
     @property
     def native_value(self) -> str:
@@ -46,37 +63,51 @@ class TechlanPkuSensor(CoordinatorEntity[TechlanDataUpdateCoordinator], SensorEn
     @property
     def extra_state_attributes(self) -> dict:
         item = self.coordinator.data.get("pkus", {}).get(self._pku, {})
-        return {"pku": self._pku, "part_count": item.get("part_count", 0), "parts": item.get("parts", {})}
+        return {
+            "pku": self._pku,
+            "part_count": item.get("part_count", 0),
+            "parts": item.get("parts", {}),
+        }
 
 
 class TechlanPartSensor(CoordinatorEntity[TechlanDataUpdateCoordinator], SensorEntity):
     """State entity for one ARM security/fire section."""
 
-    def __init__(self, coordinator: TechlanDataUpdateCoordinator, entry: ConfigEntry, pku: int, part: int, details: dict) -> None:
+    _attr_has_entity_name = False
+
+    def __init__(
+        self,
+        coordinator: TechlanDataUpdateCoordinator,
+        entry: ConfigEntry,
+        pku: int,
+        part: int,
+        details: dict,
+    ) -> None:
         super().__init__(coordinator)
         self._pku = pku
         self._part = part
         self._description = str(details.get("description") or "").strip()
         self._attr_unique_id = f"{DOMAIN}_pku_{pku}_part_{part}"
         self._attr_name = self._name()
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, f"pku_{pku}")},
-            "name": f"Скиф ПКУ {pku}",
-            "manufacturer": "Techlan",
-            "model": "ServerSkif PKU",
-            "via_device": (DOMAIN, "arm_ops"),
-        }
+        self._attr_device_info = _pku_device_info(coordinator, pku)
 
     def _name(self) -> str:
         return self._description or "Без названия"
 
     def _details(self) -> dict:
-        return self.coordinator.data.get("pkus", {}).get(self._pku, {}).get("parts", {}).get(self._part, {})
+        return (
+            self.coordinator.data.get("pkus", {})
+            .get(self._pku, {})
+            .get("parts", {})
+            .get(self._part, {})
+        )
 
     @property
     def native_value(self) -> str:
         code = int(self._details().get("state_code", -1))
-        return STATE_NAMES.get(code, "Тревога" if code in ALARM_STATE_CODES else f"Состояние {code}")
+        return STATE_NAMES.get(
+            code, "Тревога" if code in ALARM_STATE_CODES else f"Состояние {code}"
+        )
 
     @property
     def icon(self) -> str:
@@ -105,27 +136,40 @@ class TechlanPartSensor(CoordinatorEntity[TechlanDataUpdateCoordinator], SensorE
 class TechlanLoopSensor(CoordinatorEntity[TechlanDataUpdateCoordinator], SensorEntity):
     """State sensor for a configured ServerSkif loop (ШС)."""
 
-    def __init__(self, coordinator: TechlanDataUpdateCoordinator, entry: ConfigEntry, pku: int, part: int, sh: int, details: dict) -> None:
+    _attr_has_entity_name = False
+
+    def __init__(
+        self,
+        coordinator: TechlanDataUpdateCoordinator,
+        entry: ConfigEntry,
+        pku: int,
+        part: int,
+        sh: int,
+        details: dict,
+    ) -> None:
         super().__init__(coordinator)
         self._pku, self._part, self._sh = pku, part, sh
         self._description = str(details.get("description") or "").strip()
         self._attr_unique_id = f"{DOMAIN}_pku_{pku}_part_{part}_sh_{sh}"
         self._attr_name = self._description or f"ШС {sh >> 8}/{sh & 0xFF}"
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, f"pku_{pku}")},
-            "name": f"Скиф ПКУ {pku}",
-            "manufacturer": "Techlan",
-            "model": "ServerSkif PKU",
-            "via_device": (DOMAIN, "arm_ops"),
-        }
+        self._attr_device_info = _pku_device_info(coordinator, pku)
 
     def _details(self) -> dict:
-        return self.coordinator.data.get("pkus", {}).get(self._pku, {}).get("parts", {}).get(self._part, {}).get("loops", {}).get(self._sh, {})
+        return (
+            self.coordinator.data.get("pkus", {})
+            .get(self._pku, {})
+            .get("parts", {})
+            .get(self._part, {})
+            .get("loops", {})
+            .get(self._sh, {})
+        )
 
     @property
     def native_value(self) -> str:
         code = int(self._details().get("state_code", -1))
-        return STATE_NAMES.get(code, "Тревога" if code in ALARM_STATE_CODES else f"Состояние {code}")
+        return STATE_NAMES.get(
+            code, "Тревога" if code in ALARM_STATE_CODES else f"Состояние {code}"
+        )
 
     @property
     def icon(self) -> str:
@@ -138,4 +182,11 @@ class TechlanLoopSensor(CoordinatorEntity[TechlanDataUpdateCoordinator], SensorE
 
     @property
     def extra_state_attributes(self) -> dict:
-        return {"pku": self._pku, "part": self._part, "sh": self._sh, "sh_number": f"{self._sh >> 8}/{self._sh & 0xFF}", "description": self._description, "state_code": self._details().get("state_code")}
+        return {
+            "pku": self._pku,
+            "part": self._part,
+            "sh": self._sh,
+            "sh_number": f"{self._sh >> 8}/{self._sh & 0xFF}",
+            "description": self._description,
+            "state_code": self._details().get("state_code"),
+        }
