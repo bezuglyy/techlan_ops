@@ -1,11 +1,11 @@
 # SecurARM
 ![Release](https://img.shields.io/github/v/release/bezuglyy/techlan_ops?label=Release&style=flat-square) ![HACS](https://img.shields.io/badge/HACS-Custom%20Repository-purple?style=flat-square) ![License](https://img.shields.io/github/license/bezuglyy/techlan_ops?style=flat-square) ![HA](https://img.shields.io/badge/HA-2025.1%2B-2ea44f?style=flat-square)
-Кастомная интеграция для [Home Assistant](https://www.home-assistant.io) · версия **0.6.1**.
+Кастомная интеграция для [Home Assistant](https://www.home-assistant.io) · версия **0.6.2**.
 ![icon](custom_components/techlan_ops/brand/icon.png)
 | | |
 |---|---|
 | Домен | `techlan_ops` |
-| Версия | 0.6.1 |
+| Версия | 0.6.2 |
 | Тип | custom integration |
 ## Описание
 Управление охранно-пожарной системой Болид ServerSkif (**SecurARM**). Отображаемое имя интеграции — **SecurARM**; домен `techlan_ops` и `entity_id` не меняются.
@@ -14,6 +14,8 @@
 - Кнопки и действия
 - Сенсоры и мониторинг состояния
 - Переключатели и вкл/выкл устройства
+### Изменения 0.6.2
+- 🖼️ **Фирменный знак SecurARM** (щит с шестернёй и замком, логотип автора) в `brand/` — icon/logo + тёмные варианты и `@2x`.
 ### Изменения 0.6.1
 - 🏷️ **Переименование в SecurARM:** отображаемое имя интеграции и устройств — **SecurARM** (сервер ОПС SecurARM Server), обновлены логотипы/иконки (`brand/`, вордмарк **SECURARM**).
 - ⚠️ Домен `techlan_ops`, `unique_id` и все `entity_id` **не изменены** — история и автоматизации сохраняются.
