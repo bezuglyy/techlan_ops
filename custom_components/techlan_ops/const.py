@@ -30,9 +30,9 @@ PLATFORMS = ["sensor", "binary_sensor", "switch"]
 CONFIG_MINOR_VERSION = 3
 
 # Версия интеграции (синхронизировать с manifest.json).
-INTEGRATION_VERSION = "0.6.0"
+INTEGRATION_VERSION = "0.6.1"
 
 # Идентификатор и параметры родительского устройства.
 PARENT_IDENTIFIER = "arm_ops"
-DEVICE_NAME = "ARM-OPS / Techlan"
-DEVICE_MODEL = "ARM-OPS Server"
+DEVICE_NAME = "SecurARM"
+DEVICE_MODEL = "SecurARM Сервер"

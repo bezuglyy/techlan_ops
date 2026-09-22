@@ -114,7 +114,7 @@ class TechlanConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         data = self._pending_data
         if user_input is not None:
             data[CONF_SELECTED_LOOPS] = list(user_input.get(CONF_SELECTED_LOOPS, []))
-            return self.async_create_entry(title="Techlan ARM", data=data)
+            return self.async_create_entry(title="SecurARM", data=data)
         try:
             schema = await self._loop_schema(data)
         except TechlanApiError:
