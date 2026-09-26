@@ -1,4 +1,4 @@
-"""Config flow for native Techlan ARM-OPS integration."""
+"""Config flow for native SecurARM integration."""
 
 from __future__ import annotations
 
