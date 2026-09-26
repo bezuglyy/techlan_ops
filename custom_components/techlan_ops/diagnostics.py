@@ -1,4 +1,4 @@
-"""Diagnostics support for Techlan ARM-OPS."""
+"""Diagnostics support for SecurARM."""
 
 from __future__ import annotations
 
