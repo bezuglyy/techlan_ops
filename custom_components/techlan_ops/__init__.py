@@ -1,4 +1,4 @@
-"""Native Home Assistant integration for Techlan ARM-OPS (control domain).
+"""Native Home Assistant integration for SecurARM (control domain).
 
 Управление разделами идёт через сервисы ``arm_part``/``disarm_part`` и
 switch-сущности. После команды интеграция **дожидается подтверждения по
@@ -73,7 +73,7 @@ def _register_services(hass: HomeAssistant) -> None:
             runtime_data = getattr(entry, "runtime_data", None)
             if runtime_data is not None:
                 return runtime_data
-        raise HomeAssistantError("Интеграция Techlan ARM-OPS ещё не загружена")
+        raise HomeAssistantError("Интеграция SecurARM ещё не загружена")
 
     def audit(
         action: str,
@@ -142,7 +142,7 @@ def _register_services(hass: HomeAssistant) -> None:
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
-    """Set up the Techlan ARM-OPS integration."""
+    """Set up the SecurARM integration."""
     _register_services(hass)
     return True
 
@@ -162,13 +162,13 @@ async def async_migrate_entry(hass: HomeAssistant, entry: TechlanConfigEntry) ->
             entry, options=options, minor_version=CONFIG_MINOR_VERSION
         )
         _LOGGER.info(
-            "Techlan ARM-OPS migrated to minor version %s", CONFIG_MINOR_VERSION
+            "SecurARM migrated to minor version %s", CONFIG_MINOR_VERSION
         )
     return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: TechlanConfigEntry) -> bool:
-    """Set up Techlan ARM-OPS from a config entry."""
+    """Set up SecurARM from a config entry."""
     _register_services(hass)
     if entry.title != "Techlan ARM":
         hass.config_entries.async_update_entry(entry, title="Techlan ARM")
@@ -211,7 +211,7 @@ async def _async_update_listener(
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: TechlanConfigEntry) -> bool:
-    """Unload Techlan ARM-OPS and close the persistent connection."""
+    """Unload SecurARM and close the persistent connection."""
     coordinator = getattr(entry, "runtime_data", None)
     if coordinator is not None:
         await coordinator.async_shutdown()
