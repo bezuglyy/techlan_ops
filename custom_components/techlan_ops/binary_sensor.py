@@ -1,4 +1,4 @@
-"""Availability entity for Techlan ARM-OPS."""
+"""Availability entity for SecurARM."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ async def async_setup_entry(
 class TechlanAvailabilitySensor(
     CoordinatorEntity[TechlanDataUpdateCoordinator], BinarySensorEntity
 ):
-    """Service entity: ARM-OPS reachability (diagnostic)."""
+    """Service entity: SecurARM reachability (diagnostic)."""
 
     _attr_has_entity_name = True
     _attr_translation_key = "availability"
