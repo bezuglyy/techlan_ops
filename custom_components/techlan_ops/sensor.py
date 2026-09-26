@@ -1,4 +1,4 @@
-"""PKU summary sensors for Techlan ARM-OPS."""
+"""PKU summary sensors for SecurARM."""
 
 from __future__ import annotations
 
