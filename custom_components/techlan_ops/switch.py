@@ -1,4 +1,4 @@
-"""One arm/disarm switch per Techlan ARM-OPS section."""
+"""One arm/disarm switch per SecurARM section."""
 
 from __future__ import annotations
 
