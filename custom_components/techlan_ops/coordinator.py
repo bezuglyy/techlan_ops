@@ -1,4 +1,4 @@
-"""Data coordinator for Techlan ARM-OPS."""
+"""Data coordinator for SecurARM."""
 
 from __future__ import annotations
 
