@@ -3,7 +3,7 @@
 Общая механика постоянного соединения/лимитов — в ``_shared/shared_api.py``
 (канонический источник — ``tools/ha-shared/shared_api.py``).
 
-``techlan_ops`` — управляющая интеграция: помимо чтения снимка она умеет
+``securarm`` — управляющая интеграция: помимо чтения снимка она умеет
 отправлять команды ``controlPart_Arm``/``controlPart_DisArm``. Подтверждение
 команды выполняется по состоянию раздела (коды 24/109) в ``__init__.py``.
 """
@@ -34,7 +34,7 @@ __all__ = [
 
 
 class TechlanApiClient(PersistentTechlanClient):
-    """ServerSkif API client for techlan_ops (read + control)."""
+    """ServerSkif API client for securarm (read + control)."""
 
     # --- discovery (config flow selector) ------------------------------------
 

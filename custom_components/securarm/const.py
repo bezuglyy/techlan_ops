@@ -23,14 +23,14 @@ from ._shared.shared_const import (
     STATE_NAMES,
 )
 
-DOMAIN = "techlan_ops"
+DOMAIN = "securarm"
 PLATFORMS = ["sensor", "binary_sensor", "switch"]
 
 # Версия схемы config entry: minor обновляется при миграциях (async_migrate_entry).
 CONFIG_MINOR_VERSION = 3
 
 # Версия интеграции (синхронизировать с manifest.json).
-INTEGRATION_VERSION = "0.6.3"
+INTEGRATION_VERSION = "1.0.0"
 
 # Идентификатор и параметры родительского устройства.
 PARENT_IDENTIFIER = "arm_ops"
