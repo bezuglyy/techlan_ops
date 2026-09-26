@@ -1,3 +1,7 @@
+# SecurARM — интеграция Home Assistant (управление ОПС)
+
+> **Изменения 1.0.0 (26.09.2026):** домен интеграции переименован `techlan_ops` → **`securarm`** (BREAKING для уже установленных записей — см. миграцию в описании релиза). Display-имя «SecurARM» и `entity_id` не менялись.
+
 # SecurARM
 ![Release](https://img.shields.io/github/v/release/bezuglyy/techlan_ops?label=Release&style=flat-square) ![HACS](https://img.shields.io/badge/HACS-Custom%20Repository-purple?style=flat-square) ![License](https://img.shields.io/github/license/bezuglyy/techlan_ops?style=flat-square) ![HA](https://img.shields.io/badge/HA-2025.1%2B-2ea44f?style=flat-square)
 Кастомная интеграция для [Home Assistant](https://www.home-assistant.io) · версия **0.6.2**.
